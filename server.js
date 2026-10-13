@@ -1,9 +1,10 @@
-```js
+javascript
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 dotenv.config();
 
@@ -12,10 +13,12 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const distPath = path.join(__dirname, "dist");
+
 app.use(cors());
 app.use(express.json());
 
-// API health check
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -23,37 +26,42 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Summarize notes
+// Summarize study notes (demo mode)
 app.post("/api/summarize", (req, res) => {
-  const text = String(req.body.text || "").trim();
+  const text = String(req.body?.text || "").trim();
 
   if (text.length < 10) {
     return res.status(400).json({
-      error: "Please enter your study notes."
+      error: "Please enter at least 10 characters of study notes."
     });
   }
 
-  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+  const sentences =
+    text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+
+  const summary = sentences
+    .slice(0, 4)
+    .map(sentence => sentence.trim())
+    .join(" ");
 
   res.json({
-    summary: sentences.slice(0, 4)
-      .map(sentence => sentence.trim())
-      .join(" "),
+    summary,
     mode: "demo"
   });
 });
 
-// Generate quiz
+// Generate quiz questions (demo mode)
 app.post("/api/quiz", (req, res) => {
-  const text = String(req.body.text || "").trim();
+  const text = String(req.body?.text || "").trim();
 
   if (text.length < 10) {
     return res.status(400).json({
-      error: "Please enter your study notes."
+      error: "Please enter at least 10 characters of study notes."
     });
   }
 
-  const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+  const sentences =
+    text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
 
   const quiz = sentences
     .map(sentence => sentence.trim())
@@ -70,28 +78,42 @@ app.post("/api/quiz", (req, res) => {
       answer: 0
     }));
 
-  res.json({ quiz, mode: "demo" });
+  res.json({
+    quiz,
+    mode: "demo"
+  });
 });
 
 // Serve React frontend
-const distPath = path.join(__dirname, "dist");
+if (fs.existsSync(path.join(distPath, "index.html"))) {
+  app.use(express.static(distPath));
 
-app.use(express.static(distPath));
+  // React frontend fallback
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) {
+      return next();
+    }
 
-// React app fallback for homepage and frontend routes
-app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/api/")) {
-    return next();
-  }
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.status(200).send(
+      "StudyMate AI backend is running. Frontend build is not available yet."
+    );
+  });
+}
 
-  res.sendFile(path.join(distPath, "index.html"), err => {
-    if (err) next(err);
+// Handle unknown API endpoints
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: "API endpoint not found"
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`StudyMate AI running on port ${PORT}`);
+  console.log(`StudyMate AI server running on port ${PORT}`);
 });
 ```
