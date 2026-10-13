@@ -1,14 +1,21 @@
+```js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const app = express();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(cors());
 app.use(express.json());
 
+// API health check
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
@@ -16,6 +23,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Summarize notes
 app.post("/api/summarize", (req, res) => {
   const text = String(req.body.text || "").trim();
 
@@ -27,17 +35,15 @@ app.post("/api/summarize", (req, res) => {
 
   const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
 
-  const summary = sentences
-    .slice(0, 4)
-    .map(sentence => sentence.trim())
-    .join(" ");
-
   res.json({
-    summary,
+    summary: sentences.slice(0, 4)
+      .map(sentence => sentence.trim())
+      .join(" "),
     mode: "demo"
   });
 });
 
+// Generate quiz
 app.post("/api/quiz", (req, res) => {
   const text = String(req.body.text || "").trim();
 
@@ -64,14 +70,28 @@ app.post("/api/quiz", (req, res) => {
       answer: 0
     }));
 
-  res.json({
-    quiz,
-    mode: "demo"
+  res.json({ quiz, mode: "demo" });
+});
+
+// Serve React frontend
+const distPath = path.join(__dirname, "dist");
+
+app.use(express.static(distPath));
+
+// React app fallback for homepage and frontend routes
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) {
+    return next();
+  }
+
+  res.sendFile(path.join(distPath, "index.html"), err => {
+    if (err) next(err);
   });
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`StudyMate AI running on port ${PORT}`);
 });
+```
